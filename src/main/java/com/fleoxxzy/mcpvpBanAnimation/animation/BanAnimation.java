@@ -18,10 +18,9 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 /**
- * One running ban animation. All world work happens on the anchor's region thread, driven by a
- * one-tick region timer. The release (the actual ban) is guarded so it happens <b>exactly once</b>,
- * whatever path triggers it: normal completion, an exception, the chunk/world going away,
- * the hard timeout, or plugin shutdown.
+ * One running ban animation. It is purely visual: the ban itself has already happened.
+ * All world work runs on the anchor's region thread, driven by a one-tick region timer.
+ * Any failure only ends the visuals early and cleans up.
  */
 public final class BanAnimation implements AnimationContext {
 
@@ -40,7 +39,6 @@ public final class BanAnimation implements AnimationContext {
     private final Random random = new Random();
     private final Timeline timeline = new Timeline();
     private final List<Entity> spawned = new ArrayList<>();
-    private final AtomicBoolean released = new AtomicBoolean();
     private final AtomicBoolean finished = new AtomicBoolean();
 
     private volatile TaskHandle timer = TaskHandle.NONE;
@@ -69,27 +67,22 @@ public final class BanAnimation implements AnimationContext {
     // Lifecycle
     // ---------------------------------------------------------------------------------------------
 
-    /** Starts the region timer and the hard timeout. If scheduling fails, the ban is released right away. */
     void start() {
         PluginConfig.Animation a = config.animation();
         int impact = a.impactTick();
-        int release = impact + a.releaseDelayAfterImpact();
         int cleanup = impact + a.cleanupDelayAfterImpact();
 
         timeline.at(1, this::setup);
         timeline.at(a.maceSpawnTick(), this::spawnMace);
         timeline.at(impact, this::impact);
-        timeline.at(Math.min(release, cleanup), () -> release(ReleaseCause.COMPLETED));
-        timeline.at(cleanup, this::finish);
+        timeline.at(cleanup, () -> end(EndCause.COMPLETED));
 
-        // The timeout must never be shorter than the animation itself.
         long hardTimeout = Math.max(a.hardTimeoutTicks(), cleanup + 40L);
         timeout = platform.scheduler().runGlobalLater(this::onTimeout, hardTimeout);
         timer = platform.scheduler().runTimerAt(anchor, this::tick, 1L, 1L);
         if (timer == TaskHandle.NONE) {
-            plugin.getLogger().warning("Could not schedule the ban animation at " + describeAnchor() + ". Banning right away.");
-            release(ReleaseCause.ABORTED);
-            end();
+            plugin.getLogger().warning("Could not schedule the ban animation at " + describeAnchor() + ". Skipping it.");
+            finish(EndCause.ABORTED);
         }
     }
 
@@ -105,7 +98,7 @@ public final class BanAnimation implements AnimationContext {
             }
             timeline.step();
             if (timeline.isIdle()) {
-                finish();
+                end(EndCause.COMPLETED);
             }
         } catch (Throwable t) {
             abort("an error occurred", t);
@@ -135,26 +128,23 @@ public final class BanAnimation implements AnimationContext {
         callbacks.onImpact(this);
     }
 
-    /** Normal end: release (if the release tick has not run yet), clean up, stop. */
-    private void finish() {
-        release(ReleaseCause.COMPLETED);
+    /** Ends on the anchor thread: remove entities, then stop. */
+    private void end(EndCause cause) {
         cleanup();
-        end();
+        finish(cause);
     }
 
-    /** Something went wrong. The ban still goes through right now. Only call this on the anchor thread. */
+    /** Only call this on the anchor thread. */
     void abort(String reason, Throwable error) {
         if (finished.get()) {
             return;
         }
         if (error != null) {
-            plugin.getLogger().log(Level.SEVERE, "Ban animation aborted (" + reason + "). Banning right away.", error);
+            plugin.getLogger().log(Level.SEVERE, "Ban animation stopped (" + reason + ").", error);
         } else {
-            plugin.getLogger().warning("Ban animation aborted (" + reason + "). Banning right away.");
+            plugin.getLogger().warning("Ban animation stopped (" + reason + ").");
         }
-        release(ReleaseCause.ABORTED);
-        cleanup();
-        end();
+        end(EndCause.ABORTED);
     }
 
     /** Runs on the global thread. */
@@ -162,38 +152,21 @@ public final class BanAnimation implements AnimationContext {
         if (finished.get()) {
             return;
         }
-        plugin.getLogger().warning("Ban animation at " + describeAnchor() + " hit the hard timeout. Forcing the ban.");
-        release(ReleaseCause.TIMEOUT);
-        platform.scheduler().runAt(anchor, () -> {
-            cleanup();
-            end();
-        });
+        plugin.getLogger().warning("Ban animation at " + describeAnchor() + " hit the hard timeout. Cleaning up.");
+        platform.scheduler().runAt(anchor, () -> end(EndCause.TIMEOUT));
         // If the region task cannot run (e.g. its chunk is gone), still free the slot.
         manager.remove(key, this);
     }
 
     /**
-     * Plugin shutdown: release now. Clean up only if we may touch the anchor's region from here
-     * (always on Spigot/Paper, rarely on Folia). The entities are non-persistent either way.
+     * Plugin shutdown. Clean up only if we may touch the anchor's region from here (always on
+     * Spigot/Paper, rarely on Folia). The entities are non-persistent either way, so they are never saved.
      */
     void shutdown() {
-        release(ReleaseCause.SHUTDOWN);
         if (platform.scheduler().isOwnedByCurrentThread(anchor)) {
             cleanup();
         }
-        end();
-    }
-
-    /** Carries out the held ban. Exactly once, from any thread, never throws. */
-    private void release(ReleaseCause cause) {
-        if (!released.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            callbacks.onRelease(cause);
-        } catch (Throwable t) {
-            plugin.getLogger().log(Level.SEVERE, "Releasing the held ban failed (" + cause + ")", t);
-        }
+        finish(EndCause.SHUTDOWN);
     }
 
     private void cleanup() {
@@ -220,24 +193,21 @@ public final class BanAnimation implements AnimationContext {
             }
             chunkTicket = false;
         }
-        try {
-            callbacks.onCleanup();
-        } catch (Throwable t) {
-            plugin.getLogger().log(Level.WARNING, "Error during animation cleanup", t);
-        }
     }
 
-    private void end() {
+    /** Stops the timers, frees the slot and notifies the callbacks. Exactly once, from any thread. */
+    private void finish(EndCause cause) {
         if (!finished.compareAndSet(false, true)) {
             return;
         }
         timer.cancel();
         timeout.cancel();
         manager.remove(key, this);
-    }
-
-    public boolean isReleased() {
-        return released.get();
+        try {
+            callbacks.onFinish(cause);
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.WARNING, "Error in animation finish callback", t);
+        }
     }
 
     public boolean isFinished() {

@@ -27,6 +27,11 @@ repositories {
     mavenCentral()
     maven { name = 'papermc'; url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { name = 'spigotmc'; url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven {
+        name = 'jitpack'
+        url = 'https://jitpack.io'
+        content { includeGroup 'com.gitlab.ruany' }
+    }
 }
 
 java {
@@ -48,6 +53,9 @@ sourceSets {
 
 dependencies {
     compileOnly 'org.spigotmc:spigot-api:1.21-R0.1-SNAPSHOT'
+    // LiteBans' listener is a class we must extend, so it is compiled against. Only loaded when LiteBans is installed.
+    // AdvancedBan and LibertyBans are reached by reflection and need no dependency.
+    compileOnly 'com.gitlab.ruany:LiteBansAPI:0.6.1'
     paperCompileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
 }
 

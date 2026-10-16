@@ -71,7 +71,40 @@ public final class Reflect {
         try {
             return target.getClass().getMethod(name).invoke(target);
         } catch (Throwable ignored) {
-            return null;
+            return publicApiCall(target, name);
         }
+    }
+
+    /**
+     * Like {@link #invokeNoArgs}, but looks the method up on public supertypes. Needed when the
+     * object's own class is a non-public implementation of a public API interface.
+     */
+    private static Object publicApiCall(Object target, String name) {
+        for (Class<?> type = target.getClass(); type != null; type = type.getSuperclass()) {
+            Object result = callOn(type, target, name);
+            if (result != NONE) {
+                return result;
+            }
+        }
+        return null;
+    }
+
+    private static final Object NONE = new Object();
+
+    private static Object callOn(Class<?> type, Object target, String name) {
+        if (java.lang.reflect.Modifier.isPublic(type.getModifiers())) {
+            try {
+                return type.getMethod(name).invoke(target);
+            } catch (Throwable ignored) {
+                // Try the interfaces.
+            }
+        }
+        for (Class<?> iface : type.getInterfaces()) {
+            Object result = callOn(iface, target, name);
+            if (result != NONE) {
+                return result;
+            }
+        }
+        return NONE;
     }
 }

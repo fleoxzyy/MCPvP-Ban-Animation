@@ -1,10 +1,18 @@
 package com.fleoxxzy.mcpvpBanAnimation;
 
 import com.fleoxxzy.mcpvpBanAnimation.animation.AnimationManager;
+import com.fleoxxzy.mcpvpBanAnimation.command.MCPvPBanCommand;
 import com.fleoxxzy.mcpvpBanAnimation.config.ConfigManager;
+import com.fleoxxzy.mcpvpBanAnimation.core.AnimationService;
 import com.fleoxxzy.mcpvpBanAnimation.core.EntityTags;
 import com.fleoxxzy.mcpvpBanAnimation.core.LeftoverCleaner;
+import com.fleoxxzy.mcpvpBanAnimation.hook.HookManager;
+import com.fleoxxzy.mcpvpBanAnimation.intercept.CommandInterceptor;
+import com.fleoxxzy.mcpvpBanAnimation.intercept.KickInterceptor;
 import com.fleoxxzy.mcpvpBanAnimation.platform.Platform;
+import com.fleoxxzy.mcpvpBanAnimation.trigger.QuitSnapshotListener;
+import com.fleoxxzy.mcpvpBanAnimation.trigger.TriggerService;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.logging.Level;
@@ -15,6 +23,9 @@ public final class MCPvPBanAnimation extends JavaPlugin {
     private ConfigManager configManager;
     private AnimationManager animations;
     private LeftoverCleaner leftoverCleaner;
+    private AnimationService service;
+    private TriggerService triggers;
+    private HookManager hooks;
 
     @Override
     public void onEnable() {
@@ -50,13 +61,34 @@ public final class MCPvPBanAnimation extends JavaPlugin {
         getServer().getPluginManager().registerEvents(leftoverCleaner, this);
         // Worlds may already be loaded (e.g. /reload). Scan once the server has finished starting.
         platform.scheduler().runGlobal(leftoverCleaner::scanLoadedWorlds);
+
+        service = new AnimationService(this, platform, configManager, animations);
+        triggers = new TriggerService(this, configManager, service);
+        getServer().getPluginManager().registerEvents(new QuitSnapshotListener(triggers), this);
+        getServer().getPluginManager().registerEvents(new CommandInterceptor(configManager, triggers, getLogger()), this);
+        getServer().getPluginManager().registerEvents(new KickInterceptor(configManager, triggers, getLogger()), this);
+        hooks = new HookManager(this, configManager, triggers);
+        // After every plugin has enabled, so LiteBans & co. are ready (softdepend also orders them first).
+        platform.scheduler().runGlobal(hooks::enableAll);
+        PluginCommand command = getCommand("mcpvpban");
+        if (command != null) {
+            MCPvPBanCommand executor = new MCPvPBanCommand(this, platform, configManager, service, hooks);
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
+        }
     }
 
     @Override
     public void onDisable() {
+        if (hooks != null) {
+            hooks.disableAll();
+        }
         if (animations != null) {
-            // Release every held ban before anything else shuts down.
+            // Stop every animation and remove its entities before anything else shuts down.
             animations.shutdownAll();
+        }
+        if (triggers != null) {
+            triggers.shutdown();
         }
         if (leftoverCleaner != null) {
             try {
@@ -84,5 +116,9 @@ public final class MCPvPBanAnimation extends JavaPlugin {
 
     public AnimationManager animations() {
         return animations;
+    }
+
+    public TriggerService triggers() {
+        return triggers;
     }
 }

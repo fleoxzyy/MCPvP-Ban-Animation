@@ -1,41 +1,32 @@
-# ============================================================================
-#  MCPvPBanAnimation - messages.yml   (MiniMessage, legacy & codes allowed)
-# ============================================================================
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║                 MCPvPBanAnimation · messages.yml                 ║
+# ╚══════════════════════════════════════════════════════════════════╝
+#  MiniMessage, legacy &c / &#RRGGBB codes also work.
+#  Ban placeholders: {username} {reason} {staff} {duration}
 
-config-version: 1
+# Do not change. Used to upgrade this file automatically.
+config-version: 3
 
 prefix: "<dark_gray>[<dark_red>MCPvP<red>Ban<dark_gray>]</dark_gray> "
 
-broadcast: "<dark_red>☠ <red><bold>{username}</bold> <gray>has been banned by <red>{staff}<gray>. <dark_gray>({reason})"
+# Used in the label when the ban plugin doesn't say. This plugin never sends a ban message
+# to chat: your ban plugin already announces bans.
+default-reason: "Banned by an operator."
+unknown-staff: "Staff"
+permanent: "permanent"
 
+# ── Commands ────────────────────────────────────────────────────────────
 no-permission: "{prefix}<red>You don't have permission to do that."
-player-only: "{prefix}<red>Only players can do that."
 player-not-found: "{prefix}<red>Player <white>{player}</white> is not online."
-already-animating: "{prefix}<red>{username} is already being banned."
-bypassed: "{prefix}<yellow>{username} has <white>mcpvpban.bypass</white>. Banned without animation."
+already-animating: "{prefix}<red>An animation for {username} is already playing."
+test-started: "{prefix}<green>Playing the ban animation for <white>{username}</white> (test, nobody is banned)."
 reloaded: "{prefix}<green>Configuration reloaded."
 reload-failed: "{prefix}<red>Reload failed: <white>{error}</white>. The previous config is still active."
 
 usage:
-  main: "{prefix}<gray>Usage: <white>/{label} <test|ban|reload|info>"
-  test: "{prefix}<gray>Usage: <white>/{label} test <player>"
-  ban: "{prefix}<gray>Usage: <white>/{label} ban <player> [duration] [reason]"
-
-test-started: "{prefix}<green>Playing the ban animation for <white>{username}</white> (test, no ban)."
-ban-started: "{prefix}<green>Banning <white>{username}</white> for <white>{duration}</white>: <gray>{reason}"
-invalid-duration: "{prefix}<red>Invalid duration <white>{input}</white>. Examples: 30m, 12h, 7d, 1w, perm"
-
-default-reason: "Banned by an operator."
-permanent: "permanent"
-
-# Kick screen used by /mcpvpban ban.
-ban-screen: |-
-  <dark_red><bold>You have been banned!</bold>
-  
-  <gray>Reason: <white>{reason}
-  <gray>Duration: <white>{duration}
-  <gray>Banned by: <white>{staff}
+  main: "{prefix}<gray>Usage: <white>/{label} <test|reload|info>"
+  test: "{prefix}<gray>Usage: <white>/{label} test [player]"
 
 info:
-  header: "{prefix}<gray>Platform information"
+  header: "{prefix}<gray>Plugin information"
   line: "<dark_gray> » <gray>{key}: <white>{value}"

@@ -12,7 +12,7 @@ import java.util.function.Consumer;
  * <ul>
  *   <li>{@code Global}: server-wide state, command dispatch, ban lists.</li>
  *   <li>{@code At}: the region that owns a location (spawning/moving displays, particles, sounds).</li>
- *   <li>{@code For}: the thread that owns an entity (players: kill, gamemode, teleport, kick).
+ *   <li>{@code For}: the thread that owns an entity (players: snapshots, kick).
  *       The {@code retired} callback runs instead of the task if the entity is removed first
  *       (including when it is already gone at scheduling time).</li>
  *   <li>{@code Async}: work that never touches the world.</li>

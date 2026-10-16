@@ -1,6 +1,5 @@
 package com.fleoxxzy.mcpvpBanAnimation.config;
 
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
@@ -13,14 +12,14 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.logging.Level;
 
 /**
  * Loads a YAML file from the data folder and upgrades it against the bundled default.
  *
- * <p>If the file's {@code config-version} is lower than the bundled one, the old file is backed up,
- * missing keys are added from the default (with their comments), user values are kept, and
- * the version is bumped. A broken file is never overwritten: it is renamed to {@code .broken}
+ * <p>If the file's {@code config-version} is lower than the bundled one, the old file is backed up
+ * and rewritten from the default, keeping the user's values (also for renamed options). A broken file is never overwritten: it is renamed to {@code .broken}
  * and the defaults are used.
  */
 public final class VersionedYaml {
@@ -56,7 +55,7 @@ public final class VersionedYaml {
         int current = config.getInt(VERSION_KEY, 0);
         int latest = defaults.getInt(VERSION_KEY, 1);
         if (current < latest) {
-            upgrade(plugin, file, config, defaults, current, latest);
+            config = upgrade(plugin, file, config, current, latest);
         } else if (current > latest) {
             plugin.getLogger().warning(name + " has config-version " + current + ", but this build only knows version "
                     + latest + ". Was the plugin downgraded? Unknown keys are ignored.");
@@ -67,36 +66,44 @@ public final class VersionedYaml {
         return config;
     }
 
-    private static void upgrade(Plugin plugin, File file, YamlConfiguration config, YamlConfiguration defaults,
-                                int from, int to) throws IOException {
+    /**
+     * Rewrites the file from the bundled default (so removed options disappear and the comments
+     * are current) and carries over every value the user had, including renamed options.
+     */
+    private static YamlConfiguration upgrade(Plugin plugin, File file, YamlConfiguration old, int from, int to)
+            throws IOException, InvalidConfigurationException {
         File backup = new File(file.getParentFile(), file.getName() + ".v" + from + ".bak");
         Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-        int added = mergeMissing(defaults, config);
-        config.set(VERSION_KEY, to);
-        config.save(file);
-        plugin.getLogger().info("Upgraded " + file.getName() + " from v" + from + " to v" + to + " (" + added
-                + " new keys, backup: " + backup.getName() + ").");
-    }
-
-    /** Copies every leaf key present in {@code source} but missing in {@code target}. Returns the count. */
-    private static int mergeMissing(ConfigurationSection source, ConfigurationSection target) {
-        int added = 0;
-        for (String key : source.getKeys(true)) {
-            if (source.isConfigurationSection(key) || target.isSet(key)) {
+        YamlConfiguration fresh = loadBundled(plugin, file.getName());
+        int kept = 0;
+        for (String key : fresh.getKeys(true)) {
+            if (fresh.isConfigurationSection(key) || key.equals(VERSION_KEY)) {
                 continue;
             }
-            target.set(key, source.get(key));
-            try {
-                target.setComments(key, source.getComments(key));
-                target.setInlineComments(key, source.getInlineComments(key));
-            } catch (Throwable ignored) {
-                // Comment API missing on very old builds. The values still merge.
+            String oldKey = old.isSet(key) ? key : RENAMED.get(key);
+            if (oldKey != null && old.isSet(oldKey) && !old.isConfigurationSection(oldKey)) {
+                fresh.set(key, old.get(oldKey));
+                kept++;
             }
-            added++;
         }
-        return added;
+        fresh.set(VERSION_KEY, to);
+        fresh.save(file);
+        plugin.getLogger().info("Upgraded " + file.getName() + " from v" + from + " to v" + to + " (" + kept
+                + " of your settings kept, backup: " + backup.getName() + ").");
+        return fresh;
     }
+
+    /** New key → where it lived in older versions. */
+    private static final Map<String, String> RENAMED = Map.of(
+            "animation.mace-height", "mace.height",
+            "animation.enchanted-mace", "mace.enchanted",
+            "animation.look-up", "replica.look-up",
+            "animation.camera-shake", "impact.camera-shake.enabled",
+            "animation.replica", "replica.type",
+            "animation.label", "replica.label.text",
+            "detection.skip-silent-bans", "interception.command.skip-silent",
+            "detection.match-kick-message", "interception.kick.match-reason");
 
     private static YamlConfiguration loadBundled(Plugin plugin, String name) throws IOException, InvalidConfigurationException {
         YamlConfiguration yaml = new YamlConfiguration();

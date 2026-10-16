@@ -26,6 +26,8 @@ public final class AnimationManager {
     private final EntityTags tags;
     private final Effects effects;
     private final Map<UUID, BanAnimation> active = new ConcurrentHashMap<>();
+    /** Last start time per player. One ban often fires several detectors (command + kick + API hook). */
+    private final Map<UUID, Long> recentStarts = new ConcurrentHashMap<>();
     /** Entities owned by a live animation. Tagged entities not in here are leftovers. */
     private final Set<UUID> liveEntities = ConcurrentHashMap.newKeySet();
 
@@ -40,22 +42,33 @@ public final class AnimationManager {
     /**
      * Starts an animation for {@code key} at {@code anchor}. Safe to call from any thread.
      *
-     * @return the animation, or empty if one is already running for this key (the caller decides
-     *         what to do with the ban; the callbacks are <b>not</b> invoked in that case)
+     * @param ignoreCooldown true for {@code /mcpvpban test}, which may be repeated freely
+     * @return the animation, or empty if one is already running for this key or it started too
+     *         recently (duplicate detection of the same ban)
      */
-    public Optional<BanAnimation> start(UUID key, Location anchor, AnimationCallbacks callbacks) {
+    public Optional<BanAnimation> start(UUID key, Location anchor, AnimationCallbacks callbacks, boolean ignoreCooldown) {
         if (anchor == null || anchor.getWorld() == null) {
             throw new IllegalArgumentException("anchor must have a world");
+        }
+        long now = System.currentTimeMillis();
+        long cooldownMs = configs.config().trigger().duplicateCooldownTicks() * 50L;
+        if (!ignoreCooldown) {
+            Long last = recentStarts.get(key);
+            if (last != null && now - last < cooldownMs) {
+                return Optional.empty();
+            }
         }
         BanAnimation animation = new BanAnimation(plugin, platform, this, tags, effects, configs.config(),
                 key, anchor, callbacks);
         if (active.putIfAbsent(key, animation) != null) {
             return Optional.empty();
         }
+        recentStarts.put(key, now);
+        recentStarts.values().removeIf(t -> now - t > Math.max(cooldownMs, 60_000L));
         try {
             animation.start();
         } catch (Throwable t) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to start the ban animation. Banning right away.", t);
+            plugin.getLogger().log(Level.SEVERE, "Failed to start the ban animation.", t);
             animation.shutdown();
         }
         return Optional.of(animation);
@@ -82,7 +95,7 @@ public final class AnimationManager {
         return liveEntities.contains(entityId);
     }
 
-    /** Disable: every held ban is released right now. */
+    /** Disable: stop every animation and remove what we can. */
     public void shutdownAll() {
         for (BanAnimation animation : new ArrayList<>(active.values())) {
             try {

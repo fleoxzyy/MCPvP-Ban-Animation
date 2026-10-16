@@ -157,7 +157,7 @@ public final class SpigotScheduler implements TaskScheduler {
             BukkitTask bt = delayTicks <= 0 ? bukkit.runTask(plugin, safe) : bukkit.runTaskLater(plugin, safe, delayTicks);
             return wrap(bt);
         } catch (Throwable t) {
-            // Fails only while the plugin is disabled. Run inline so ban releases are not lost.
+            // Fails only while the plugin is disabled. Run inline so cleanup still happens.
             if (Bukkit.isPrimaryThread()) {
                 runSafely(task);
             } else {

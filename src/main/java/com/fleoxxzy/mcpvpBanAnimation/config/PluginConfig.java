@@ -3,7 +3,6 @@ package com.fleoxxzy.mcpvpBanAnimation.config;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
@@ -13,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Immutable, validated snapshot of {@code config.yml}. A reload builds a new instance and swaps it
@@ -22,21 +20,18 @@ import java.util.regex.PatternSyntaxException;
 public record PluginConfig(
         boolean debug,
         Animation animation,
-        Kill kill,
-        Spectator spectator,
+        Trigger trigger,
         Replica replica,
         Mace mace,
         Impact impact,
         Bones bones,
-        Broadcast broadcast,
         CommandInterception commandInterception,
         KickInterception kickInterception,
-        Map<HookTarget, HookMode> hooks,
-        boolean testSpectate
+        Map<HookTarget, HookMode> hooks
 ) {
 
-    public record Animation(int maceSpawnDelay, int maceFallTicks, int releaseDelayAfterImpact,
-                            int cleanupDelayAfterImpact, int hardTimeoutTicks) {
+    public record Animation(int maceSpawnDelay, int maceFallTicks, int cleanupDelayAfterImpact,
+                            int hardTimeoutTicks) {
         /** Tick (from start, first tick = 1) at which the mace spawns. */
         public int maceSpawnTick() {
             return Math.max(1, maceSpawnDelay);
@@ -48,25 +43,21 @@ public record PluginConfig(
         }
     }
 
-    /** {@code deathMessage == null} = hidden. {@link #VANILLA_DEATH_MESSAGE} = keep the default. */
-    public record Kill(boolean enabled, boolean dropItems, boolean dropExp, String deathMessage) {
-    }
-
-    public static final String VANILLA_DEATH_MESSAGE = "vanilla";
-
-    public record Spectator(boolean enabled, double distance, double height, double sideAngle, int lockInterval) {
+    /** All values in ticks. */
+    public record Trigger(int snapshotLifetimeTicks, int duplicateCooldownTicks, int pendingBanLifetimeTicks) {
     }
 
     public record Label(String text, double offsetY, float scale, double bobAmplitude, double pulseAmplitude,
                         int period, boolean shadow, int backgroundArgb) {
     }
 
-    public record Replica(ReplicaType type, boolean copyEquipment, boolean leatherFallback, Label label,
-                          int squashTicks, float squashMinHeight) {
+    public record Replica(ReplicaType type, boolean copyEquipment, boolean leatherFallback, float lookUpDegrees,
+                          Label label, int squashTicks, float squashMinHeight) {
     }
 
-    public record Mace(String material, double height, float scale, double impactHeight, double spinDegrees,
-                       boolean trailEnabled, List<String> trailParticles, int trailCount) {
+    public record Mace(String material, boolean enchanted, double height, float scale, double impactHeight,
+                       double spinDegrees, float yawOffset, boolean trailEnabled, List<String> trailParticles,
+                       int trailCount) {
     }
 
     public record SoundSpec(String key, float volume, float pitch) {
@@ -96,15 +87,21 @@ public record PluginConfig(
                         BonePhysics physics) {
     }
 
-    public record Broadcast(boolean enabled, String permission) {
-    }
-
-    /** {@code commands} are lower-case labels without the slash, e.g. {@code litebans:ban}. */
+    /** {@code commands} are lower-case labels without the slash, e.g. {@code ban} or {@code litebans:ban}. */
     public record CommandInterception(Set<String> commands, boolean respectCommandPermission, boolean skipSilent,
                                       Set<String> silentFlags) {
+        /** True for a watched label, also when it is namespaced ({@code anyplugin:tempban}). */
+        public boolean isBanCommand(String label) {
+            if (commands.contains(label)) {
+                return true;
+            }
+            int colon = label.indexOf(':');
+            return colon > 0 && commands.contains(label.substring(colon + 1));
+        }
     }
 
-    public record KickInterception(boolean enabled, List<Pattern> reasonPatterns, boolean checkBanList) {
+    public record KickInterception(boolean enabled, boolean checkBanList, boolean matchReason,
+                                   List<Pattern> reasonPatterns) {
     }
 
     /** Ban sources that can each have their own {@link HookMode}. */
@@ -115,7 +112,7 @@ public record PluginConfig(
         ADVANCEDBAN("advancedban", HookMode.API),
         LIBERTYBANS("libertybans", HookMode.API),
         LIGHTBANS("lightbans", HookMode.COMMAND),
-        UNKNOWN("unknown", HookMode.KICK);
+        UNKNOWN("other", HookMode.COMMAND);
 
         private final String key;
         private final HookMode defaultMode;
@@ -132,6 +129,22 @@ public record PluginConfig(
         public HookMode defaultMode() {
             return defaultMode;
         }
+
+        /** The ban source for a plugin name (e.g. "LiteBans"), or {@link #UNKNOWN}. */
+        public static HookTarget fromPluginName(String pluginName) {
+            if (pluginName == null) {
+                return UNKNOWN;
+            }
+            return switch (pluginName.toLowerCase(Locale.ROOT)) {
+                case "minecraft", "bukkit", "spigot", "paper" -> VANILLA;
+                case "essentials", "essentialsx" -> ESSENTIALS;
+                case "litebans" -> LITEBANS;
+                case "advancedban" -> ADVANCEDBAN;
+                case "libertybans" -> LIBERTYBANS;
+                case "lightbans" -> LIGHTBANS;
+                default -> UNKNOWN;
+            };
+        }
     }
 
     public HookMode hookMode(HookTarget target) {
@@ -139,135 +152,97 @@ public record PluginConfig(
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Parsing
+    // Parsing. Only the options a server owner really needs are read from config.yml. The rest
+    // is the fixed MCPvP look and lives below as constants.
     // ---------------------------------------------------------------------------------------------
 
+    private static final String DEFAULT_LABEL = "<red>â— <dark_red><bold>{username} BANNED</bold> <red>â—";
+
+    /** Ban commands that are always watched, under any plugin's namespace. {@code detection.extra-commands} adds more. */
+    private static final List<String> BAN_COMMANDS = List.of(
+            "ban", "ban-ip", "banip", "ipban", "tempban", "tban", "tempipban", "tipban", "tempbanip",
+            "eban", "etempban", "ebanip", "etempbanip", "permban", "pban");
+
+    private static final Set<String> SILENT_FLAGS = Set.of("-s", "--silent", "-silent");
+
+    private static final List<Pattern> KICK_PATTERNS = List.of(
+            Pattern.compile("you (are|have been) (perm(anently)?|temp(orarily)?)?\\s*banned", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\bban(ned)? (until|expires)\\b", Pattern.CASE_INSENSITIVE));
+
+    private static final Trigger TRIGGER = new Trigger(200, 100, 100);
+
+    private static final List<SoundSpec> IMPACT_SOUNDS = List.of(
+            new SoundSpec("minecraft:item.mace.smash_ground_heavy", 1.6f, 0.9f),
+            new SoundSpec("minecraft:entity.generic.explode", 1.0f, 1.1f),
+            new SoundSpec("minecraft:entity.skeleton.death", 1.2f, 0.8f),
+            new SoundSpec("minecraft:block.bone_block.break", 1.4f, 0.7f));
+
+    private static final List<ParticleSpec> IMPACT_PARTICLES = List.of(
+            new ParticleSpec("minecraft:explosion", 3, 0.6, 0.0, null, 0, 1f),
+            new ParticleSpec("minecraft:crit", 60, 0.8, 0.6, null, 0, 1f),
+            new ParticleSpec("minecraft:cloud", 40, 0.9, 0.08, null, 0, 1f),
+            new ParticleSpec("minecraft:block", 70, 0.7, 0.15, "minecraft:bone_block", 0, 1f),
+            new ParticleSpec("minecraft:dust", 45, 0.9, 0.0, null, 0x8B0000, 1.6f));
+
+    private static final Shockwave SHOCKWAVE = new Shockwave(true, "minecraft:cloud", 4.5, 6, 1, 36);
+
+    private static final Bones BONES = new Bones(20, 30, 3, 0.7f, 50, 10,
+            new BonePhysics(0.055, 0.975, 0.45, 0.7, 0.25, 0.6, 0.35, 0.75, 0.2, 1.8, 25f));
+
+    private static final int CLEANUP_AFTER_IMPACT = 60;
+
     public static PluginConfig from(FileConfiguration c, Logger log) {
-        Animation animation = new Animation(
-                clampInt(c.getInt("animation.mace-spawn-delay"), 0, 200),
-                clampInt(c.getInt("animation.mace-fall-ticks"), 2, 200),
-                clampInt(c.getInt("animation.release-delay-after-impact"), 0, 400),
-                clampInt(c.getInt("animation.cleanup-delay-after-impact"), 1, 600),
-                clampInt(c.getInt("animation.hard-timeout-ticks"), 40, 6000));
+        int spawnDelay = clampInt(c.getInt("animation.mace-spawn-delay", 4), 0, 200);
+        int fallTicks = clampInt(c.getInt("animation.mace-fall-ticks", 20), 2, 200);
+        // Safety net well past the normal end of the animation.
+        int hardTimeout = spawnDelay + fallTicks + CLEANUP_AFTER_IMPACT + 100;
+        Animation animation = new Animation(spawnDelay, fallTicks, CLEANUP_AFTER_IMPACT, hardTimeout);
 
-        String deathMessage = c.getString("kill.death-message", "");
-        Kill kill = new Kill(
-                c.getBoolean("kill.enabled"),
-                c.getBoolean("kill.drop-items"),
-                c.getBoolean("kill.drop-exp"),
-                deathMessage == null || deathMessage.isEmpty() ? null : deathMessage);
-
-        Spectator spectator = new Spectator(
-                c.getBoolean("spectator.enabled"),
-                clamp(c.getDouble("spectator.distance"), 1.5, 20),
-                clamp(c.getDouble("spectator.height"), -5, 20),
-                clamp(c.getDouble("spectator.side-angle"), -180, 180),
-                clampInt(c.getInt("spectator.lock-interval"), 1, 20));
-
-        Label label = new Label(
-                c.getString("replica.label.text", "<red>● <dark_red><bold>{username} BANNED</bold> <red>●"),
-                clamp(c.getDouble("replica.label.offset-y"), 0, 10),
-                (float) clamp(c.getDouble("replica.label.scale"), 0.1, 10),
-                clamp(c.getDouble("replica.label.bob-amplitude"), 0, 2),
-                clamp(c.getDouble("replica.label.pulse-amplitude"), 0, 1),
-                clampInt(c.getInt("replica.label.period"), 2, 400),
-                c.getBoolean("replica.label.shadow"),
-                parseArgb(c.getString("replica.label.background", "0"), log));
+        Label label = new Label(c.getString("animation.label", DEFAULT_LABEL),
+                2.35, 1.25f, 0.06, 0.08, 30, true, 0x40000000);
 
         Replica replica = new Replica(
-                ReplicaType.parse(c.getString("replica.type")),
-                c.getBoolean("replica.copy-equipment"),
-                c.getBoolean("replica.leather-fallback"),
+                ReplicaType.parse(c.getString("animation.replica", "auto")),
+                true,
+                true,
+                (float) clamp(c.getDouble("animation.look-up", 55), 0, 90),
                 label,
-                clampInt(c.getInt("replica.squash.ticks"), 1, 40),
-                (float) clamp(c.getDouble("replica.squash.min-height-scale"), 0.01, 1));
+                4,
+                0.08f);
 
         Mace mace = new Mace(
-                c.getString("mace.material", "MACE"),
-                clamp(c.getDouble("mace.height"), 2, 64),
-                (float) clamp(c.getDouble("mace.scale"), 0.1, 10),
-                clamp(c.getDouble("mace.impact-height"), -2, 10),
-                c.getDouble("mace.spin-degrees"),
-                c.getBoolean("mace.trail.enabled"),
-                List.copyOf(c.getStringList("mace.trail.particles")),
-                clampInt(c.getInt("mace.trail.count"), 0, 50));
+                "MACE",
+                c.getBoolean("animation.enchanted-mace", true),
+                clamp(c.getDouble("animation.mace-height", 12), 2, 64),
+                2.0f,
+                1.3,
+                35.0,
+                0f,
+                true,
+                List.of("minecraft:cloud", "minecraft:smoke"),
+                3);
 
-        Impact impact = new Impact(
-                parseSounds(c.getMapList("impact.sounds")),
-                parseParticles(c.getMapList("impact.particles"), log),
-                new Shockwave(
-                        c.getBoolean("impact.shockwave.enabled"),
-                        c.getString("impact.shockwave.particle", "minecraft:cloud"),
-                        clamp(c.getDouble("impact.shockwave.max-radius"), 0.5, 32),
-                        clampInt(c.getInt("impact.shockwave.rings"), 1, 40),
-                        clampInt(c.getInt("impact.shockwave.ring-interval"), 1, 20),
-                        clampInt(c.getInt("impact.shockwave.points-per-ring"), 4, 200)),
-                new CameraShake(
-                        c.getBoolean("impact.camera-shake.enabled"),
-                        clamp(c.getDouble("impact.camera-shake.radius"), 0, 128),
-                        clampInt(c.getInt("impact.camera-shake.pulses"), 1, 20),
-                        clampInt(c.getInt("impact.camera-shake.interval"), 1, 20)));
+        Impact impact = new Impact(IMPACT_SOUNDS, IMPACT_PARTICLES, SHOCKWAVE,
+                new CameraShake(c.getBoolean("animation.camera-shake", true), 16.0, 3, 3));
 
-        int countMin = clampInt(c.getInt("bones.count-min"), 0, 200);
-        int countMax = Math.max(countMin, clampInt(c.getInt("bones.count-max"), 0, 200));
-        double speedMin = clamp(c.getDouble("bones.physics.speed-min"), 0, 5);
-        double upwardMin = clamp(c.getDouble("bones.physics.upward-min"), 0, 5);
-        int lifetime = clampInt(c.getInt("bones.lifetime"), 1, 1200);
-        Bones bones = new Bones(
-                countMin,
-                countMax,
-                clampInt(c.getInt("bones.skulls"), 0, 50),
-                (float) clamp(c.getDouble("bones.scale"), 0.05, 5),
-                lifetime,
-                clampInt(c.getInt("bones.fade-ticks"), 0, lifetime),
-                new BonePhysics(
-                        clamp(c.getDouble("bones.physics.gravity"), 0, 1),
-                        clamp(c.getDouble("bones.physics.drag"), 0.5, 1),
-                        clamp(c.getDouble("bones.physics.bounce"), 0, 1),
-                        clamp(c.getDouble("bones.physics.ground-friction"), 0, 1),
-                        speedMin,
-                        Math.max(speedMin, clamp(c.getDouble("bones.physics.speed-max"), 0, 5)),
-                        upwardMin,
-                        Math.max(upwardMin, clamp(c.getDouble("bones.physics.upward-max"), 0, 5)),
-                        clamp(c.getDouble("bones.physics.high-fly-chance"), 0, 1),
-                        clamp(c.getDouble("bones.physics.high-fly-multiplier"), 1, 5),
-                        (float) clamp(c.getDouble("bones.physics.spin"), 0, 180)));
-
-        Broadcast broadcast = new Broadcast(
-                c.getBoolean("broadcast.enabled"),
-                c.getString("broadcast.permission", ""));
-
-        Set<String> commands = new LinkedHashSet<>();
-        for (String cmd : c.getStringList("interception.command.commands")) {
+        Set<String> commands = new LinkedHashSet<>(BAN_COMMANDS);
+        for (String cmd : c.getStringList("detection.extra-commands")) {
             String normalized = normalizeCommand(cmd);
             if (!normalized.isEmpty()) {
                 commands.add(normalized);
             }
         }
-        Set<String> silentFlags = new LinkedHashSet<>();
-        for (String flag : c.getStringList("interception.command.silent-flags")) {
-            if (flag != null && !flag.isBlank()) {
-                silentFlags.add(flag.trim().toLowerCase(Locale.ROOT));
-            }
-        }
         CommandInterception commandInterception = new CommandInterception(
                 Collections.unmodifiableSet(commands),
-                c.getBoolean("interception.command.respect-command-permission"),
-                c.getBoolean("interception.command.skip-silent"),
-                Collections.unmodifiableSet(silentFlags));
+                true,
+                c.getBoolean("detection.skip-silent-bans", true),
+                SILENT_FLAGS);
 
-        List<Pattern> patterns = new ArrayList<>();
-        for (String regex : c.getStringList("interception.kick.reason-patterns")) {
-            try {
-                patterns.add(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
-            } catch (PatternSyntaxException e) {
-                log.warning("Ignoring invalid kick reason pattern '" + regex + "': " + e.getDescription());
-            }
-        }
         KickInterception kickInterception = new KickInterception(
-                c.getBoolean("interception.kick.enabled"),
-                List.copyOf(patterns),
-                c.getBoolean("interception.kick.check-banlist"));
+                true,
+                true,
+                c.getBoolean("detection.match-kick-message", false),
+                KICK_PATTERNS);
 
         Map<HookTarget, HookMode> hooks = new EnumMap<>(HookTarget.class);
         ConfigurationSection hookSection = c.getConfigurationSection("hooks");
@@ -282,13 +257,12 @@ public record PluginConfig(
 
         return new PluginConfig(
                 c.getBoolean("debug"),
-                animation, kill, spectator, replica, mace, impact, bones, broadcast,
+                animation, TRIGGER, replica, mace, impact, BONES,
                 commandInterception, kickInterception,
-                Collections.unmodifiableMap(hooks),
-                c.getBoolean("test.spectate"));
+                Collections.unmodifiableMap(hooks));
     }
 
-    /** {@code "/LiteBans:Ban"} → {@code "litebans:ban"}. */
+    /** {@code "/LiteBans:Ban"} â†’ {@code "litebans:ban"}. */
     public static String normalizeCommand(String raw) {
         if (raw == null) {
             return "";
@@ -299,82 +273,6 @@ public record PluginConfig(
         }
         int space = s.indexOf(' ');
         return space >= 0 ? s.substring(0, space) : s;
-    }
-
-    private static List<SoundSpec> parseSounds(List<Map<?, ?>> raw) {
-        List<SoundSpec> out = new ArrayList<>();
-        for (Map<?, ?> m : raw) {
-            String key = str(m.get("key"));
-            if (key == null || key.isBlank()) {
-                continue;
-            }
-            out.add(new SoundSpec(key.trim(),
-                    (float) clamp(num(m.get("volume"), 1), 0, 10),
-                    (float) clamp(num(m.get("pitch"), 1), 0.5, 2)));
-        }
-        return List.copyOf(out);
-    }
-
-    private static List<ParticleSpec> parseParticles(List<Map<?, ?>> raw, Logger log) {
-        List<ParticleSpec> out = new ArrayList<>();
-        for (Map<?, ?> m : raw) {
-            String key = str(m.get("key"));
-            if (key == null || key.isBlank()) {
-                continue;
-            }
-            out.add(new ParticleSpec(key.trim(),
-                    (int) clamp(num(m.get("count"), 10), 0, 2000),
-                    clamp(num(m.get("offset"), 0.5), 0, 16),
-                    clamp(num(m.get("speed"), 0), 0, 10),
-                    str(m.get("data")),
-                    parseRgb(str(m.get("color")), log),
-                    (float) clamp(num(m.get("size"), 1), 0.01, 4)));
-        }
-        return List.copyOf(out);
-    }
-
-    private static int parseRgb(String hex, Logger log) {
-        if (hex == null || hex.isBlank()) {
-            return 0xFF0000;
-        }
-        String h = hex.trim().replace("#", "");
-        try {
-            return Integer.parseInt(h, 16) & 0xFFFFFF;
-        } catch (NumberFormatException e) {
-            log.warning("Invalid particle color '" + hex + "'. Using red.");
-            return 0xFF0000;
-        }
-    }
-
-    private static int parseArgb(String hex, Logger log) {
-        if (hex == null || hex.isBlank()) {
-            return 0;
-        }
-        String h = hex.trim().replace("#", "");
-        try {
-            return (int) Long.parseLong(h, 16);
-        } catch (NumberFormatException e) {
-            log.warning("Invalid label background '" + hex + "'. Using none.");
-            return 0;
-        }
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
-    }
-
-    private static double num(Object o, double fallback) {
-        if (o instanceof Number n) {
-            return n.doubleValue();
-        }
-        if (o != null) {
-            try {
-                return Double.parseDouble(String.valueOf(o).trim());
-            } catch (NumberFormatException ignored) {
-                return fallback;
-            }
-        }
-        return fallback;
     }
 
     private static double clamp(double v, double min, double max) {

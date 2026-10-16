@@ -283,8 +283,8 @@ public final class FoliaScheduler implements TaskScheduler {
     }
 
     private TaskHandle failed(String what, Throwable t, Runnable task) {
-        // Global scheduling fails only while disabled. Ban releases go through the global
-        // scheduler, so run inline if we are already on the global thread.
+        // Global scheduling fails only while disabled. Run inline if we are already on the
+        // global thread, so cleanup still happens.
         if (isGlobalThread()) {
             runSafely(task);
         } else {

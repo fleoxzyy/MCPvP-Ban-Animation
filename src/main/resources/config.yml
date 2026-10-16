@@ -1,200 +1,53 @@
-# ============================================================================
-#  MCPvPBanAnimation - config.yml
-#  Text uses MiniMessage (https://docs.advntr.dev/minimessage/format.html).
-#  Legacy &c and &#RRGGBB codes also work. On Spigot, MiniMessage is converted to legacy colors.
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║                  MCPvPBanAnimation · config.yml                  ║
+# ╚══════════════════════════════════════════════════════════════════╝
+#
+#  A player is banned → the ban goes through instantly → a replica of them is
+#  smashed by a giant falling mace, and bones fly everywhere.
+#  Only bans play it (ban, tempban, IP ban). A normal /kick never does.
+#
+#  Text uses MiniMessage. Legacy &c / &#RRGGBB codes also work.
 #  Placeholders: {username} {reason} {staff} {duration}
-#  All times are in ticks (20 ticks = 1 second).
-# ============================================================================
+#  Times are in ticks (20 ticks = 1 second).
+#
+#  /mcpvpban test    preview the animation on yourself
+#  /mcpvpban reload  apply changes to this file and messages.yml
 
 # Do not change. Used to upgrade this file automatically.
-config-version: 1
+config-version: 4
 
-# Log extra details about interceptions and animations.
+# Log why each kick/command was or wasn't treated as a ban.
 debug: false
 
+# ── Animation ───────────────────────────────────────────────────────────
 animation:
-  # Ticks between the kill and the mace spawning above the replica.
-  mace-spawn-delay: 20
-  # How long the mace takes to fall (ease-in).
-  mace-fall-ticks: 26
-  # Ticks after impact before the held ban is released.
-  release-delay-after-impact: 50
-  # Ticks after impact before every spawned entity is removed.
-  cleanup-delay-after-impact: 80
-  # Safety net: if the animation has not finished after this many ticks, the ban is forced.
-  hard-timeout-ticks: 400
+  # The mace appears this long after the ban...
+  mace-spawn-delay: 4
+  # ...and falls for this long. Defaults: impact at about 1.2 s, all gone after about 4 s.
+  mace-fall-ticks: 20
+  # How high above the replica the mace starts, in blocks.
+  mace-height: 12.0
+  # Enchantment shimmer on the mace.
+  enchanted-mace: true
+  # How far the replica looks up at the mace, in degrees (0 = straight ahead).
+  look-up: 55
+  # Shake the screen of nearby players on impact.
+  camera-shake: true
+  # auto = real player model on 1.21.9+ (Mannequin), armor stand on older versions.
+  # Or force: mannequin / armorstand
+  replica: auto
+  # Floating text above the replica.
+  label: "<red>● <dark_red><bold>{username} BANNED</bold> <red>●"
 
-kill:
-  # Kill the player when the animation starts. If false, the player only spectates.
-  enabled: true
-  # true = drop inventory and XP like a normal death. false = keep inventory.
-  drop-items: false
-  drop-exp: false
-  # Death message. "" hides it. "vanilla" keeps the default death message.
-  death-message: "<dark_red>☠ <red>{username} <gray>was smashed by the ban hammer."
-
-spectator:
-  # After the kill, respawn instantly in SPECTATOR mode and watch the replica.
-  enabled: true
-  # Camera position relative to the replica (in front of it, looking back at it).
-  distance: 5.0
-  height: 1.8
-  # Rotates the camera sideways around the replica, in degrees (0 = straight in front).
-  side-angle: 25.0
-  # How often (in ticks) the camera position is re-locked.
-  lock-interval: 2
-
-replica:
-  # auto       = Mannequin on 1.21.9+, otherwise an ArmorStand
-  # mannequin  = always a Mannequin (falls back to an ArmorStand if unsupported)
-  # armorstand = always an ArmorStand with the player's head
-  type: auto
-  # Copy the player's armor and held items onto the replica.
-  copy-equipment: true
-  # ArmorStand only: if the player wears no armor, use leather armor dyed to match their skin.
-  leather-fallback: true
-  label:
-    text: "<red>● <dark_red><bold>{username} BANNED</bold> <red>●"
-    # Height above the replica's feet.
-    offset-y: 2.35
-    scale: 1.25
-    # Gentle bobbing (blocks) and pulsing (fraction of scale).
-    bob-amplitude: 0.06
-    pulse-amplitude: 0.08
-    # One full bob/pulse cycle, in ticks.
-    period: 30
-    shadow: true
-    # Background color as ARGB hex. 0 = no background.
-    background: "40000000"
-  squash:
-    # On impact the replica is squashed flat over this many ticks, then removed.
-    ticks: 4
-    min-height-scale: 0.08
-
-mace:
-  # Item used for the falling weapon. Falls back to IRON_AXE if this material is missing.
-  material: MACE
-  height: 12.0
-  scale: 2.0
-  # Height above the replica's feet where the mace's center stops on impact.
-  impact-height: 1.3
-  # Total rotation during the fall, in degrees.
-  spin-degrees: 35.0
-  trail:
-    enabled: true
-    particles: [ "minecraft:cloud", "minecraft:smoke" ]
-    count: 3
-
-impact:
-  sounds:
-    - { key: "minecraft:item.mace.smash_ground_heavy", volume: 1.6, pitch: 0.9 }
-    - { key: "minecraft:entity.generic.explode", volume: 1.0, pitch: 1.1 }
-    - { key: "minecraft:entity.skeleton.death", volume: 1.2, pitch: 0.8 }
-    - { key: "minecraft:block.bone_block.break", volume: 1.4, pitch: 0.7 }
-  # Particles are looked up by key. Missing ones are skipped.
-  # offset = spread in each direction, speed = particle "extra" value.
-  particles:
-    - { key: "minecraft:explosion", count: 3, offset: 0.6, speed: 0.0 }
-    - { key: "minecraft:crit", count: 60, offset: 0.8, speed: 0.6 }
-    - { key: "minecraft:cloud", count: 40, offset: 0.9, speed: 0.08 }
-    - { key: "minecraft:block", count: 70, offset: 0.7, speed: 0.15, data: "minecraft:bone_block" }
-    - { key: "minecraft:dust", count: 45, offset: 0.9, speed: 0.0, color: "8B0000", size: 1.6 }
-  shockwave:
-    enabled: true
-    particle: "minecraft:cloud"
-    max-radius: 4.5
-    # Number of rings, and ticks between rings.
-    rings: 6
-    ring-interval: 1
-    points-per-ring: 36
-  camera-shake:
-    # Tilts the screen of nearby players (the vanilla hurt-camera effect, no damage).
-    enabled: true
-    radius: 16.0
-    # Number of tilts, and ticks between them.
-    pulses: 3
-    interval: 3
-
-bones:
-  count-min: 20
-  count-max: 30
-  skulls: 3
-  scale: 0.7
-  # Bone lifetime after impact, in ticks. Bones shrink away over the final fade-ticks.
-  lifetime: 70
-  fade-ticks: 12
-  physics:
-    gravity: 0.055
-    drag: 0.975
-    bounce: 0.45
-    ground-friction: 0.7
-    speed-min: 0.25
-    speed-max: 0.6
-    upward-min: 0.35
-    upward-max: 0.75
-    # Fraction of bones launched extra high.
-    high-fly-chance: 0.2
-    high-fly-multiplier: 1.8
-    # Max spin per tick, in degrees.
-    spin: 25.0
-
-broadcast:
-  enabled: true
-  # Only players with this permission see it. "" = everyone.
-  permission: ""
-
-# ----------------------------------------------------------------------------
-#  Ban plugin interception
-# ----------------------------------------------------------------------------
-interception:
-  command:
-    # Commands that ban a player. Namespaced forms and aliases are matched exactly.
-    # The first argument must be the target player name.
-    commands:
-      - ban
-      - tempban
-      - ipban
-      - ban-ip
-      - banip
-      - tempipban
-      - minecraft:ban
-      - minecraft:ban-ip
-      - essentials:ban
-      - essentials:tempban
-      - essentials:eban
-      - essentials:etempban
-      - litebans:ban
-      - litebans:tempban
-      - litebans:ipban
-      - litebans:tempipban
-      - advancedban:ban
-      - advancedban:tempban
-      - advancedban:ipban
-      - libertybans:ban
-      - lightbans:ban
-      - lightbans:tempban
-    # Skip the animation (ban instantly) if the sender lacks the real command's permission,
-    # so the ban plugin can show its own "no permission" message.
-    respect-command-permission: true
-    # Commands with any of these flags are not animated.
-    skip-silent: true
-    silent-flags: [ "-s", "--silent", "-silent" ]
-  kick:
-    # Fallback for bans that don't go through a command (web panels, APIs, other plugins).
-    enabled: true
-    # Spigot has no kick cause. A kick counts as a ban if the reason matches one of these
-    # regexes (case-insensitive) or the player is on the ban list.
-    reason-patterns:
-      - "(?i)\\bbanned\\b"
-      - "(?i)\\bban(ned)? (until|for|expires)\\b"
-      - "(?i)you are banned"
-    check-banlist: true
-
-# Mode per ban plugin:
-#   COMMAND = intercept its commands (universal)
-#   KICK    = only catch the kick it sends
-#   API     = use the plugin's own event API (most reliable, falls back to COMMAND if unavailable)
-#   OFF     = never animate bans from this plugin
+# ── Ban plugins ─────────────────────────────────────────────────────────
+# Works with every ban plugin. Their ban commands (/ban, /tempban, /ipban, /banip, /tempipban...)
+# are watched automatically, also namespaced ones like /anyplugin:ban.
+# These plugins are hooked directly for exact staff / reason / duration:
+# LiteBans, AdvancedBan, LibertyBans. You normally don't need to touch this.
+#   API      the plugin's own events (most accurate)
+#   COMMAND  watch its ban commands + the kick that follows
+#   KICK     only count kicks the server itself reports as bans
+#   OFF      never animate this plugin's bans
 hooks:
   vanilla: COMMAND
   essentials: COMMAND
@@ -202,9 +55,19 @@ hooks:
   advancedban: API
   libertybans: API
   lightbans: COMMAND
-  # Bans from anything else (detected by kick only).
-  unknown: KICK
+  # Every other ban plugin (BanManager, MaxBans, ...).
+  other: COMMAND
 
-test:
-  # /mcpvpban test: the player only watches (no kill, no ban). Everything is restored afterwards.
-  spectate: true
+detection:
+  # Don't animate silent bans (/ban Steve -s).
+  skip-silent-bans: true
+  # Only needed if your ban plugin uses an unusual command name, e.g. [ "punish", "gban" ].
+  # The target player must be the first argument.
+  extra-commands: []
+  # For bans made without a command (web panels, GUIs) on plugins with their own ban storage:
+  # also count a kick as a ban if its message says "you have been banned". Off by default,
+  # because a normal kick message could say that too.
+  match-kick-message: false
+  # Last resort for unsupported ban plugins: count a kick as a ban if its message says
+  # "you have been banned". Off by default, a normal kick message could say that too.
+  match-kick-message: false

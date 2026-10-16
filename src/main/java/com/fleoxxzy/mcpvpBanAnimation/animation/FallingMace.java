@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -32,19 +33,38 @@ final class FallingMace {
     }
 
     void spawn() {
-        ItemStack item = new ItemStack(resolveMaterial(cfg.material()));
-        float startYaw = ctx.random().nextFloat() * 360f;
-        this.yaw = startYaw;
+        ItemStack item = createItem();
+        float facing = ctx.anchor().getYaw();
+        // The display entity takes the player's yaw, so every rotation below is relative to where
+        // they were facing. The spin unwinds during the fall and ends exactly on that direction.
+        this.yaw = (float) -cfg.spinDegrees();
         display = ctx.spawn(ctx.anchor(), ItemDisplay.class, d -> {
+            d.setRotation(facing, 0f);
             d.setItemStack(item);
             d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
             d.setBillboard(Display.Billboard.FIXED);
             d.setViewRange(2.5f);
             d.setShadowRadius(0.6f);
             d.setShadowStrength(0.4f);
-            Displays.pose(d, offset(cfg.height()), rotation(startYaw), Displays.uniform(cfg.scale()), 0);
+            Displays.pose(d, offset(cfg.height()), rotation(yaw), Displays.uniform(cfg.scale()), 0);
         });
         ctx.every(this::fallTick);
+    }
+
+    private ItemStack createItem() {
+        ItemStack item = new ItemStack(resolveMaterial(cfg.material()));
+        if (cfg.enchanted()) {
+            try {
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    meta.setEnchantmentGlintOverride(true);
+                    item.setItemMeta(meta);
+                }
+            } catch (Throwable ignored) {
+                // No glint override on this server: the mace just won't shimmer.
+            }
+        }
+        return item;
     }
 
     private boolean fallTick(int age) {
@@ -53,7 +73,7 @@ final class FallingMace {
         }
         double t = Math.min(1.0, (double) age / fallTicks);
         double y = cfg.impactHeight() + (cfg.height() - cfg.impactHeight()) * (1.0 - Displays.easeInFall(t));
-        yaw += (float) (cfg.spinDegrees() / fallTicks);
+        yaw = (float) (-cfg.spinDegrees() * (1.0 - t));
         Displays.pose(display, offset(y), rotation(yaw), Displays.uniform(cfg.scale()), 1);
 
         if (cfg.trailEnabled() && cfg.trailCount() > 0 && age < fallTicks) {
@@ -71,11 +91,11 @@ final class FallingMace {
             return;
         }
         float scale = cfg.scale();
-        Displays.pose(display, offset(cfg.impactHeight() - 0.25), rotation(yaw + 4f), Displays.uniform(scale), 3);
+        Displays.pose(display, offset(cfg.impactHeight() - 0.25), rotation(yaw), Displays.uniform(scale), 3);
         int shrink = Math.min(10, Math.max(1, ticksUntilCleanup - 1));
         ctx.schedule(Math.max(1, ticksUntilCleanup - shrink), () -> {
             if (display.isValid()) {
-                Displays.pose(display, offset(cfg.impactHeight() - 0.6), rotation(yaw + 4f), Displays.uniform(0.01f), shrink);
+                Displays.pose(display, offset(cfg.impactHeight() - 0.6), rotation(yaw), Displays.uniform(0.01f), shrink);
             }
         });
     }
@@ -84,8 +104,9 @@ final class FallingMace {
         return new Vector3f(0f, (float) y, 0f);
     }
 
-    private static Quaternionf rotation(float yawDegrees) {
-        return new Quaternionf().rotateY((float) Math.toRadians(yawDegrees)).rotateZ(HEAD_DOWN);
+    /** {@code yawDegrees} is relative to the player's facing; {@code mace.yaw-offset} turns the whole mace. */
+    private Quaternionf rotation(float yawDegrees) {
+        return new Quaternionf().rotateY((float) Math.toRadians(-(yawDegrees + cfg.yawOffset()))).rotateZ(HEAD_DOWN);
     }
 
     static Material resolveMaterial(String configured) {

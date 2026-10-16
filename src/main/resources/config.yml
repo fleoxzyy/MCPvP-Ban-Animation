@@ -64,10 +64,6 @@ detection:
   # Only needed if your ban plugin uses an unusual command name, e.g. [ "punish", "gban" ].
   # The target player must be the first argument.
   extra-commands: []
-  # For bans made without a command (web panels, GUIs) on plugins with their own ban storage:
-  # also count a kick as a ban if its message says "you have been banned". Off by default,
-  # because a normal kick message could say that too.
-  match-kick-message: false
   # Last resort for unsupported ban plugins: count a kick as a ban if its message says
   # "you have been banned". Off by default, a normal kick message could say that too.
   match-kick-message: false

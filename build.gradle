@@ -1,0 +1,82 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.4.3'
+    id 'xyz.jpenilla.run-paper' version '2.3.1'
+}
+
+group = 'com.fleoxxzy'
+def baseVersion = '1.1.2'
+
+// Short commit hash of HEAD, or 'nogit' when there is no repository / git is not installed.
+def getGitHash = { ->
+    try {
+        def result = providers.exec {
+            commandLine 'git', 'rev-parse', '--short', 'HEAD'
+            ignoreExitValue = true
+        }
+        def hash = result.standardOutput.asText.get().trim()
+        return (result.result.get().exitValue == 0 && hash) ? hash : 'nogit'
+    } catch (Exception ignored) {
+        return 'nogit'
+    }
+}
+
+version = "${baseVersion}-${getGitHash()}"
+
+repositories {
+    mavenCentral()
+    maven { name = 'papermc'; url = 'https://repo.papermc.io/repository/maven-public/' }
+    maven { name = 'spigotmc'; url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+}
+
+java {
+    // Java 21 bytecode runs on both Java 21 (1.21.x) and Java 25 (26.x) servers.
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+/*
+ * Two source sets, one jar:
+ *  - main  : shared + Spigot code, compiled against spigot-api ONLY. It cannot see Adventure or
+ *            the Folia scheduler API, so Spigot can never accidentally load those types.
+ *  - paper : Paper/Folia-only code, compiled against paper-api. Loaded reflectively after detection.
+ */
+sourceSets {
+    paper {
+        compileClasspath += sourceSets.main.output
+    }
+}
+
+dependencies {
+    compileOnly 'org.spigotmc:spigot-api:1.21-R0.1-SNAPSHOT'
+    paperCompileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+jar {
+    archiveClassifier = 'plain'
+}
+
+shadowJar {
+    archiveClassifier = ''
+    from sourceSets.paper.output
+}
+
+assemble.dependsOn shadowJar
+
+runServer {
+    minecraftVersion '1.21'
+}

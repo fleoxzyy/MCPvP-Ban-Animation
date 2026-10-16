@@ -1,0 +1,35 @@
+name: MCPvPBanAnimation
+version: '${version}'
+main: com.fleoxxzy.mcpvpBanAnimation.MCPvPBanAnimation
+api-version: '1.21'
+folia-supported: true
+authors: [ fleoraticlyyy ]
+description: MCPvP-style ban animation - the banned player is killed, a replica is smashed by a falling mace and bones fly everywhere.
+softdepend: [ LiteBans, AdvancedBan, LibertyBans, Essentials ]
+
+commands:
+  mcpvpban:
+    description: MCPvPBanAnimation main command.
+    usage: /<command> <test|ban|reload|info>
+    aliases: [ mcpvpbananimation, banimation ]
+
+permissions:
+  mcpvpban.*:
+    description: Grants every MCPvPBanAnimation permission except bypass.
+    default: op
+    children:
+      mcpvpban.test: true
+      mcpvpban.ban: true
+      mcpvpban.admin: true
+  mcpvpban.test:
+    description: Play the animation on a player without killing or banning them.
+    default: op
+  mcpvpban.ban:
+    description: Ban a player through the built-in vanilla ban list with the animation.
+    default: op
+  mcpvpban.admin:
+    description: Reload the config and view platform info.
+    default: op
+  mcpvpban.bypass:
+    description: This player is never animated or killed; their bans go through instantly.
+    default: false

@@ -30,7 +30,7 @@ animation:
   # Enchantment shimmer on the mace.
   enchanted-mace: true
   # How far the replica looks up at the mace, in degrees (0 = straight ahead).
-  look-up: 55
+  look-up: 75
   # Shake the screen of nearby players on impact.
   camera-shake: true
   # auto = real player model on 1.21.9+ (Mannequin), armor stand on older versions.

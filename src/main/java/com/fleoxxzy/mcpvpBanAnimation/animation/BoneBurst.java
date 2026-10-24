@@ -191,7 +191,7 @@ final class BoneBurst {
         private double floorBelow(double bx, double fromY, double bz) {
             double rest = 0.06 * baseScale;
             Location probe = new Location(world, bx, fromY, bz);
-            if (!ctx.platform().scheduler().isOwnedByCurrentThread(probe)) {
+            if (!loadedAndOwned(probe)) {
                 return groundFallback + rest;
             }
             int startY = (int) Math.floor(fromY);
@@ -207,9 +207,15 @@ final class BoneBurst {
             return groundFallback + rest;
         }
 
+        /** Never load a chunk from the animation tick, and never read a region we don't own (Folia). */
+        private boolean loadedAndOwned(Location probe) {
+            return world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)
+                    && ctx.platform().scheduler().isOwnedByCurrentThread(probe);
+        }
+
         private boolean isSolid(double bx, double by, double bz) {
             Location probe = new Location(world, bx, by, bz);
-            if (!ctx.platform().scheduler().isOwnedByCurrentThread(probe)) {
+            if (!loadedAndOwned(probe)) {
                 return false;
             }
             Block block = world.getBlockAt((int) Math.floor(bx), (int) Math.floor(by), (int) Math.floor(bz));

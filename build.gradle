@@ -57,6 +57,7 @@ dependencies {
     // AdvancedBan and LibertyBans are reached by reflection and need no dependency.
     compileOnly 'com.gitlab.ruany:LiteBansAPI:0.6.1'
     paperCompileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
+    implementation 'org.bstats:bstats-bukkit:3.2.1'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -81,6 +82,13 @@ jar {
 shadowJar {
     archiveClassifier = ''
     from sourceSets.paper.output
+    configurations = [project.configurations.runtimeClasspath]
+    dependencies {
+        // Only bStats is bundled, nothing else.
+        exclude { it.moduleGroup != 'org.bstats' }
+    }
+    // Own package, so it never clashes with another plugin's copy of bStats.
+    relocate 'org.bstats', 'com.fleoxxzy.mcpvpBanAnimation.libs.bstats'
 }
 
 assemble.dependsOn shadowJar

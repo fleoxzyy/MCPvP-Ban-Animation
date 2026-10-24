@@ -10,14 +10,22 @@ import com.fleoxxzy.mcpvpBanAnimation.hook.HookManager;
 import com.fleoxxzy.mcpvpBanAnimation.intercept.CommandInterceptor;
 import com.fleoxxzy.mcpvpBanAnimation.intercept.KickInterceptor;
 import com.fleoxxzy.mcpvpBanAnimation.platform.Platform;
+import com.fleoxxzy.mcpvpBanAnimation.replica.ReplicaStage;
 import com.fleoxxzy.mcpvpBanAnimation.trigger.QuitSnapshotListener;
 import com.fleoxxzy.mcpvpBanAnimation.trigger.TriggerService;
+import org.bstats.bukkit.Metrics;
+import org.bstats.charts.AdvancedPie;
+import org.bstats.charts.SimplePie;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 
 public final class MCPvPBanAnimation extends JavaPlugin {
+
+    private static final int BSTATS_ID = 34911;
 
     private Platform platform;
     private ConfigManager configManager;
@@ -75,6 +83,29 @@ public final class MCPvPBanAnimation extends JavaPlugin {
             MCPvPBanCommand executor = new MCPvPBanCommand(this, platform, configManager, service, hooks);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
+        }
+        startMetrics();
+    }
+
+    /** bStats. Server owners can opt out in plugins/bStats/config.yml. Never breaks the plugin. */
+    private void startMetrics() {
+        try {
+            Metrics metrics = new Metrics(this, BSTATS_ID);
+            metrics.addCustomChart(new SimplePie("platform", () -> platform.type().displayName()));
+            metrics.addCustomChart(new SimplePie("replica_type", () ->
+                    ReplicaStage.usesMannequin(configManager.config().replica().type()) ? "Mannequin" : "Armor stand"));
+            metrics.addCustomChart(new AdvancedPie("ban_plugin", () -> {
+                Map<String, Integer> out = new HashMap<>();
+                for (String name : hooks.activeHooks()) {
+                    out.put(name, 1);
+                }
+                if (out.isEmpty()) {
+                    out.put("Other / vanilla", 1);
+                }
+                return out;
+            }));
+        } catch (Throwable t) {
+            getLogger().log(Level.FINE, "bStats could not start", t);
         }
     }
 

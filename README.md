@@ -5,10 +5,8 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Paper%2FSpigot%2FFolia-blue?style=for-the-badge&logo=papermc&logoColor=white)](https://papermc.io/)
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21%20--%2026.x-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](#requirements)
-<!-- bStats: replace PLUGIN_ID with your bStats plugin ID and uncomment.
-[![bStats Servers](https://img.shields.io/bstats/servers/PLUGIN_ID?style=for-the-badge&logo=apachespark&logoColor=white&label=bStats%20Servers&labelColor=181717&color=00AF5C)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/PLUGIN_ID)
-[![bStats Players](https://img.shields.io/bstats/players/PLUGIN_ID?style=for-the-badge&logo=minecraft&logoColor=white&label=bStats%20Players&labelColor=181717&color=5865F2)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/PLUGIN_ID)
--->
+[![bStats Servers](https://img.shields.io/bstats/servers/34911?style=for-the-badge&logo=apachespark&logoColor=white&label=bStats%20Servers&labelColor=181717&color=00AF5C)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/34911)
+[![bStats Players](https://img.shields.io/bstats/players/34911?style=for-the-badge&logo=minecraft&logoColor=white&label=bStats%20Players&labelColor=181717&color=5865F2)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/34911)
 [![GitHub](https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/fleoxzyy/MCPvP-Ban-Animation)
 [![Discord](https://img.shields.io/badge/Community-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/5XEqzkSwza)
 [![Modrinth](https://img.shields.io/badge/Download-Modrinth-00AF5C?style=for-the-badge&logo=modrinth&logoColor=white)](https://modrinth.com/plugin/mcpvp-ban-animation)
@@ -176,15 +174,14 @@ gradlew.bat shadowJar      # Windows
 
 The jar is written to `build/libs/`.
 
-<!-- bStats: replace PLUGIN_ID and uncomment.
 ## Statistics
 <div align="center">
 
-[![bStats](https://bstats.org/signatures/bukkit/MCPvPBanAnimation.svg)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/PLUGIN_ID)
+[![bStats](https://bstats.org/signatures/bukkit/MCPvPBanAnimation.svg)](https://bstats.org/plugin/bukkit/MCPvPBanAnimation/34911)
 
 </div>
--->
 
+This plugin uses [bStats](https://bstats.org/) to collect anonymous usage stats (server count, platform, which ban plugin is used). You can turn it off in `plugins/bStats/config.yml`.
 ## Support
 
 Found a bug or have a question? Ask on Discord or open an issue on GitHub.

@@ -177,7 +177,12 @@ public final class BanAnimation implements AnimationContext {
         timeline.clear();
         for (Entity entity : spawned) {
             try {
-                entity.remove();
+                if (platform.scheduler().isOwnedByCurrentThread(entity)) {
+                    entity.remove();
+                } else {
+                    // Pushed into another region (Folia): remove it on its own thread.
+                    platform.scheduler().runFor(entity, entity::remove, null);
+                }
             } catch (Throwable ignored) {
                 // Already gone, or not ours to touch any more.
             } finally {

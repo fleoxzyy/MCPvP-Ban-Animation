@@ -156,7 +156,7 @@ public record PluginConfig(
     // is the fixed MCPvP look and lives below as constants.
     // ---------------------------------------------------------------------------------------------
 
-    private static final String DEFAULT_LABEL = "<red>â— <dark_red><bold>{username} BANNED</bold> <red>â—";
+    private static final String DEFAULT_LABEL = "<red>\u25CF <dark_red><bold>{username} BANNED</bold> <red>\u25CF";
 
     /** Ban commands that are always watched, under any plugin's namespace. {@code detection.extra-commands} adds more. */
     private static final List<String> BAN_COMMANDS = List.of(
@@ -205,7 +205,7 @@ public record PluginConfig(
                 ReplicaType.parse(c.getString("animation.replica", "auto")),
                 true,
                 true,
-                (float) clamp(c.getDouble("animation.look-up", 55), 0, 90),
+                (float) clamp(c.getDouble("animation.look-up", 75), 0, 90),
                 label,
                 4,
                 0.08f);
@@ -262,7 +262,7 @@ public record PluginConfig(
                 Collections.unmodifiableMap(hooks));
     }
 
-    /** {@code "/LiteBans:Ban"} â†’ {@code "litebans:ban"}. */
+    /** {@code "/LiteBans:Ban"} -> {@code "litebans:ban"}. */
     public static String normalizeCommand(String raw) {
         if (raw == null) {
             return "";

@@ -17,8 +17,13 @@ public enum HookMode {
         if (raw == null) {
             return fallback;
         }
+        String value = raw.trim().toUpperCase(Locale.ROOT);
+        // YAML reads an unquoted OFF (or no) as the boolean false.
+        if (value.equals("FALSE")) {
+            return OFF;
+        }
         try {
-            return valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            return valueOf(value);
         } catch (IllegalArgumentException e) {
             return fallback;
         }

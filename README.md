@@ -1,5 +1,4 @@
-<!-- Banner: replace the link below with your uploaded banner image. -->
-<!-- ![Banner](https://cdn.modrinth.com/data/cached_images/BANNER.png) -->
+![Banner](https://cdn.modrinth.com/data/cached_images/aeb6ad6b015e85bca1423fe12f8c0a3ead6a4dab.png)
 
 <div align="center">
 

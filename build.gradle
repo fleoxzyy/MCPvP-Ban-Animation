@@ -5,23 +5,7 @@ plugins {
 }
 
 group = 'com.fleoxxzy'
-def baseVersion = '1.1.2'
-
-// Short commit hash of HEAD, or 'nogit' when there is no repository / git is not installed.
-def getGitHash = { ->
-    try {
-        def result = providers.exec {
-            commandLine 'git', 'rev-parse', '--short', 'HEAD'
-            ignoreExitValue = true
-        }
-        def hash = result.standardOutput.asText.get().trim()
-        return (result.result.get().exitValue == 0 && hash) ? hash : 'nogit'
-    } catch (Exception ignored) {
-        return 'nogit'
-    }
-}
-
-version = "${baseVersion}-${getGitHash()}"
+version = '1.1.3'
 
 repositories {
     mavenCentral()

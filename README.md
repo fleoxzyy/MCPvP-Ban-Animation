@@ -180,7 +180,6 @@ The jar is written to `build/libs/`.
 
 </div>
 
-This plugin uses [bStats](https://bstats.org/) to collect anonymous usage stats (server count, platform, which ban plugin is used). You can turn it off in `plugins/bStats/config.yml`.
 ## Support
 
 Found a bug or have a question? Ask on Discord or open an issue on GitHub.

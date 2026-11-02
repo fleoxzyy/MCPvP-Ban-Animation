@@ -12,7 +12,13 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 /**
@@ -42,6 +48,16 @@ public final class VersionedYaml {
         try {
             config.load(file);
         } catch (InvalidConfigurationException e) {
+            if (removeDuplicateKeys(plugin, file)) {
+                config = new YamlConfiguration();
+                config.options().parseComments(true);
+                try {
+                    config.load(file);
+                    return finish(plugin, name, file, config, defaults);
+                } catch (InvalidConfigurationException ignored) {
+                    // Still broken for another reason: handled below.
+                }
+            }
             File broken = new File(file.getParentFile(), name + ".broken");
             Files.move(file.toPath(), broken.toPath(), StandardCopyOption.REPLACE_EXISTING);
             plugin.saveResource(name, true);
@@ -51,7 +67,11 @@ public final class VersionedYaml {
             config.options().parseComments(true);
             config.load(file);
         }
+        return finish(plugin, name, file, config, defaults);
+    }
 
+    private static YamlConfiguration finish(Plugin plugin, String name, File file, YamlConfiguration config,
+                                            YamlConfiguration defaults) throws IOException, InvalidConfigurationException {
         int current = config.getInt(VERSION_KEY, 0);
         int latest = defaults.getInt(VERSION_KEY, 1);
         if (current < latest) {
@@ -104,6 +124,56 @@ public final class VersionedYaml {
             "animation.label", "replica.label.text",
             "detection.skip-silent-bans", "interception.command.skip-silent",
             "detection.match-kick-message", "interception.kick.match-reason");
+
+    /**
+     * 1.1.2 shipped a config.yml with {@code match-kick-message} twice, which YAML refuses to load.
+     * Drops every later copy of a key (and the comment right above it), so the user's settings survive.
+     */
+    private static boolean removeDuplicateKeys(Plugin plugin, File file) throws IOException {
+        List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+        List<String> out = new ArrayList<>();
+        Deque<Map.Entry<Integer, String>> parents = new ArrayDeque<>();
+        Set<String> seen = new HashSet<>();
+        int skipIndent = -1;
+        boolean changed = false;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            int indent = line.length() - line.stripLeading().length();
+            if (skipIndent >= 0) {
+                if (trimmed.isEmpty() || indent > skipIndent || (indent == skipIndent && trimmed.startsWith("- "))) {
+                    continue;
+                }
+                skipIndent = -1;
+            }
+            int colon = trimmed.indexOf(':');
+            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("- ") || colon <= 0) {
+                out.add(line);
+                continue;
+            }
+            while (!parents.isEmpty() && parents.peek().getKey() >= indent) {
+                parents.pop();
+            }
+            StringBuilder path = new StringBuilder();
+            parents.descendingIterator().forEachRemaining(p -> path.append(p.getValue()).append('.'));
+            path.append(trimmed, 0, colon);
+            if (!seen.add(path.toString())) {
+                while (!out.isEmpty() && out.get(out.size() - 1).trim().startsWith("#")
+                        && out.get(out.size() - 1).indexOf('#') == indent) {
+                    out.remove(out.size() - 1);
+                }
+                skipIndent = indent;
+                changed = true;
+                continue;
+            }
+            parents.push(Map.entry(indent, trimmed.substring(0, colon)));
+            out.add(line);
+        }
+        if (changed) {
+            Files.write(file.toPath(), out, StandardCharsets.UTF_8);
+            plugin.getLogger().info("Removed duplicate keys from " + file.getName() + ".");
+        }
+        return changed;
+    }
 
     private static YamlConfiguration loadBundled(Plugin plugin, String name) throws IOException, InvalidConfigurationException {
         YamlConfiguration yaml = new YamlConfiguration();

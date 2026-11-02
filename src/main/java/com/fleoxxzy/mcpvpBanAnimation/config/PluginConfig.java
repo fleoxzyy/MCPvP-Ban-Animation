@@ -48,7 +48,7 @@ public record PluginConfig(
     }
 
     public record Label(String text, double offsetY, float scale, double bobAmplitude, double pulseAmplitude,
-                        int period, boolean shadow, int backgroundArgb) {
+                        int period, boolean shadow, int backgroundArgb, boolean shake) {
     }
 
     public record Replica(ReplicaType type, boolean copyEquipment, boolean leatherFallback, float lookUpDegrees,
@@ -157,6 +157,7 @@ public record PluginConfig(
     // ---------------------------------------------------------------------------------------------
 
     private static final String DEFAULT_LABEL = "<red>\u25CF <dark_red><bold>{username} BANNED</bold> <red>\u25CF";
+    private static final String PLAIN_LABEL = "<white>{username}";
 
     /** Ban commands that are always watched, under any plugin's namespace. {@code detection.extra-commands} adds more. */
     private static final List<String> BAN_COMMANDS = List.of(
@@ -198,8 +199,11 @@ public record PluginConfig(
         int hardTimeout = spawnDelay + fallTicks + CLEANUP_AFTER_IMPACT + 100;
         Animation animation = new Animation(spawnDelay, fallTicks, CLEANUP_AFTER_IMPACT, hardTimeout);
 
-        Label label = new Label(c.getString("animation.label", DEFAULT_LABEL),
-                2.35, 1.25f, 0.06, 0.08, 30, true, 0x40000000);
+        String labelText = c.getBoolean("animation.custom-label", false)
+                ? c.getString("animation.label", DEFAULT_LABEL)
+                : PLAIN_LABEL;
+        Label label = new Label(labelText, 2.35, 1.25f, 0.06, 0.08, 30, true, 0x40000000,
+                c.getBoolean("animation.label-shake", false));
 
         Replica replica = new Replica(
                 ReplicaType.parse(c.getString("animation.replica", "auto")),

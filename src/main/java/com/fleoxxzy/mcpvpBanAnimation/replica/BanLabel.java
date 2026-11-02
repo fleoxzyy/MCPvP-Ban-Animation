@@ -46,7 +46,7 @@ final class BanLabel {
             d.setBrightness(new Display.Brightness(15, 15));
             pose(d, 0f, cfg.scale(), 0);
         });
-        if (display != null) {
+        if (display != null && cfg.shake()) {
             ctx.every(this::tick);
         }
     }

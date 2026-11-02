@@ -105,7 +105,7 @@ Common ban commands are recognised automatically, also with a plugin prefix like
 #  /mcpvpban reload  apply changes to this file and messages.yml
 
 # Do not change. Used to upgrade this file automatically.
-config-version: 4
+config-version: 5
 
 # Log why each kick/command was or wasn't treated as a ban.
 debug: false
@@ -127,8 +127,13 @@ animation:
   # auto = real player model on 1.21.9+ (Mannequin), armor stand on older versions.
   # Or force: mannequin / armorstand
   replica: auto
-  # Floating text above the replica.
+  # Text above the replica.
+  #   false = just the player's name, like a normal nametag.
+  #   true  = the custom text in "label" below.
+  custom-label: false
   label: "<red>● <dark_red><bold>{username} BANNED</bold> <red>●"
+  # Make the text above the replica bob and pulse.
+  label-shake: false
 
 # ── Ban plugins ─────────────────────────────────────────────────────────
 # Works with every ban plugin. Their ban commands (/ban, /tempban, /ipban, /banip, /tempipban...)

@@ -23,6 +23,8 @@ public final class SkinColors {
     public static final Palette DEFAULT = new Palette(0x00A8A8, 0x3A3AB0, 0x4A4A4A);
 
     private static final int MAX_BYTES = 64 * 1024;
+    /** Skins are cached by URL. Without a cap this grows with every unique skin seen since startup. */
+    private static final int MAX_CACHED = 256;
 
     private final TaskScheduler scheduler;
     private final Logger logger;
@@ -41,6 +43,10 @@ public final class SkinColors {
     public CompletableFuture<Palette> get(String skinUrl) {
         if (skinUrl == null || !isTrustedHost(skinUrl)) {
             return CompletableFuture.completedFuture(DEFAULT);
+        }
+        if (cache.size() >= MAX_CACHED && !cache.containsKey(skinUrl)) {
+            // Cheap reset instead of a full LRU: palettes are tiny and easy to re-fetch.
+            cache.clear();
         }
         return cache.computeIfAbsent(skinUrl, url -> {
             CompletableFuture<Palette> future = new CompletableFuture<>();

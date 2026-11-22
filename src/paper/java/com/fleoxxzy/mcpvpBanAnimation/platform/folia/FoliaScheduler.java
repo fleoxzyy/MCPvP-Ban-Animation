@@ -124,7 +124,7 @@ public final class FoliaScheduler implements TaskScheduler {
                 once.run();
                 return TaskHandle.NONE;
             }
-            return track(st);
+            return trackEntityTask(st, once);
         } catch (Throwable t) {
             log("schedule entity task", t);
             once.run();
@@ -146,7 +146,7 @@ public final class FoliaScheduler implements TaskScheduler {
                 once.run();
                 return TaskHandle.NONE;
             }
-            return track(st);
+            return trackEntityTask(st, once);
         } catch (Throwable t) {
             log("schedule entity timer", t);
             once.run();
@@ -254,6 +254,20 @@ public final class FoliaScheduler implements TaskScheduler {
         return new Handle(st);
     }
 
+    /**
+     * If the entity goes away before the task runs, Folia only calls the retired callback, so
+     * runTracked never gets to untrack it. Let the retired callback drop it too.
+     */
+    private TaskHandle trackEntityTask(ScheduledTask st, RetireOnce once) {
+        once.task = st;
+        TaskHandle handle = track(st);
+        if (once.isDone()) {
+            // Retired while we were still scheduling.
+            tracked.remove(st);
+        }
+        return handle;
+    }
+
     private static boolean isFinished(ScheduledTask st) {
         ScheduledTask.ExecutionState state = st.getExecutionState();
         return state == ScheduledTask.ExecutionState.FINISHED
@@ -336,14 +350,23 @@ public final class FoliaScheduler implements TaskScheduler {
     private final class RetireOnce implements Runnable {
         private final Runnable delegate;
         private final AtomicBoolean done = new AtomicBoolean();
+        private volatile ScheduledTask task;
 
         RetireOnce(Runnable delegate) {
             this.delegate = delegate;
         }
 
+        boolean isDone() {
+            return done.get();
+        }
+
         @Override
         public void run() {
             if (done.compareAndSet(false, true)) {
+                ScheduledTask st = task;
+                if (st != null) {
+                    tracked.remove(st);
+                }
                 runSafely(delegate);
             }
         }
